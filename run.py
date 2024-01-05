@@ -83,6 +83,9 @@ class PnlpMixerTokenClsTrainModule(pl.LightningModule):
             model_cfg.mixer,
             model_cfg.token_cls,
         )
+        self.training_step_outputs = []
+        self.validation_step_outputs = []
+        self.test_step_outputs = []
 
     def common_step(self, batch): 
         inputs = batch['inputs']
@@ -110,29 +113,35 @@ class PnlpMixerTokenClsTrainModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         results = self.common_step(batch)
         self.log('train_loss', results['loss'], on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.training_step_outputs.append(results)
         return results
     
-    def training_epoch_end(self, outputs):
-        accuracy = self.compute_accuracy(outputs)
+    def on_train_epoch_end(self):
+        accuracy = self.compute_accuracy(self.training_step_outputs)
         self.log('train_acc', accuracy['acc'], on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.training_step_outputs.clear()
 
     def validation_step(self, batch, batch_idx):
         results = self.common_step(batch)
         self.log('val_loss', results['loss'], on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.validation_step_outputs.append(results)
         return results
     
-    def validation_epoch_end(self, outputs):
-        accuracy = self.compute_accuracy(outputs)
+    def on_validation_epoch_end(self):
+        accuracy = self.compute_accuracy(self.validation_step_outputs)
         self.log('val_acc', accuracy['acc'], on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.validation_step_outputs.clear()
 
     def test_step(self, batch, batch_idx):
         results = self.common_step(batch)
         self.log('test_loss', results['loss'], on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.test_step_outputs.append(results)
         return results
     
-    def test_epoch_end(self, outputs):
-        accuracy = self.compute_accuracy(outputs)
+    def test_epoch_end(self):
+        accuracy = self.compute_accuracy(self.test_step_outputs)
         self.log('test_acc', accuracy['acc'], on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.test_step_outputs.clear()
 
     def configure_optimizers(self):
         optimizer_cfg = self.optimizer_cfg
@@ -177,10 +186,9 @@ if __name__ == '__main__':
                 mode='max'
             )
         ],
-        checkpoint_callback=True, 
-        gpus=-1,
+        devices=8,
         log_every_n_steps=train_cfg.log_interval_steps,
-        logger=pl.loggers.TensorBoardLogger(train_cfg.tensorboard_path, args.name),
+        # logger=pl.loggers.TensorBoardLogger(train_cfg.tensorboard_path, args.name),
         max_epochs=train_cfg.epochs, 
     )
     if args.mode == 'train':
